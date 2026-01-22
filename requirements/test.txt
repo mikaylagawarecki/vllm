@@ -64,7 +64,7 @@ backoff==2.2.1
     # via
     #   -r requirements/test.in
     #   schemathesis
-bitsandbytes==0.46.1
+# bitsandbytes==0.46.1  # commented out - conflicts with custom PyTorch CUDA version
     # via
     #   -r requirements/test.in
     #   lightning
@@ -584,44 +584,44 @@ numpy==1.26.4
     #   tritonclient
     #   vocos
     #   xarray
-nvidia-cublas-cu12==12.9.1.4
+# nvidia-cublas-cu12==12.9.1.4  # commented out - using custom PyTorch
     # via
     #   nvidia-cudnn-cu12
     #   nvidia-cusolver-cu12
     #   torch
-nvidia-cuda-cupti-cu12==12.9.79
+# nvidia-cuda-cupti-cu12==12.9.79  # commented out - using custom PyTorch
     # via torch
-nvidia-cuda-nvrtc-cu12==12.9.86
+# nvidia-cuda-nvrtc-cu12==12.9.86  # commented out - using custom PyTorch
     # via torch
-nvidia-cuda-runtime-cu12==12.9.79
+# nvidia-cuda-runtime-cu12==12.9.79  # commented out - using custom PyTorch
     # via torch
-nvidia-cudnn-cu12==9.10.2.21
+# nvidia-cudnn-cu12==9.10.2.21  # commented out - using custom PyTorch
     # via torch
-nvidia-cufft-cu12==11.4.1.4
+# nvidia-cufft-cu12==11.4.1.4  # commented out - using custom PyTorch
     # via torch
-nvidia-cufile-cu12==1.14.1.1
+# nvidia-cufile-cu12==1.14.1.1  # commented out - using custom PyTorch
     # via torch
-nvidia-curand-cu12==10.3.10.19
+# nvidia-curand-cu12==10.3.10.19  # commented out - using custom PyTorch
     # via torch
-nvidia-cusolver-cu12==11.7.5.82
+# nvidia-cusolver-cu12==11.7.5.82  # commented out - using custom PyTorch
     # via torch
-nvidia-cusparse-cu12==12.5.10.65
+# nvidia-cusparse-cu12==12.5.10.65  # commented out - using custom PyTorch
     # via
     #   nvidia-cusolver-cu12
     #   torch
-nvidia-cusparselt-cu12==0.7.1
+# nvidia-cusparselt-cu12==0.7.1  # commented out - using custom PyTorch
     # via torch
-nvidia-nccl-cu12==2.27.5
+# nvidia-nccl-cu12==2.27.5  # commented out - using custom PyTorch
     # via torch
-nvidia-nvjitlink-cu12==12.9.86
+# nvidia-nvjitlink-cu12==12.9.86  # commented out - using custom PyTorch
     # via
     #   nvidia-cufft-cu12
     #   nvidia-cusolver-cu12
     #   nvidia-cusparse-cu12
     #   torch
-nvidia-nvshmem-cu12==3.4.5
+# nvidia-nvshmem-cu12==3.4.5  # commented out - using custom PyTorch
     # via torch
-nvidia-nvtx-cu12==12.9.79
+# nvidia-nvtx-cu12==12.9.79  # commented out - using custom PyTorch
     # via torch
 omegaconf==2.3.0
     # via
@@ -1139,7 +1139,7 @@ tomli==2.2.1
     # via schemathesis
 tomli-w==1.2.0
     # via schemathesis
-torch==2.10.0+cu129
+# torch==2.10.0+cu129  # commented out - using custom PyTorch
     # via
     #   -r requirements/test.in
     #   accelerate
@@ -1168,7 +1168,7 @@ torch==2.10.0+cu129
     #   torchvision
     #   vector-quantize-pytorch
     #   vocos
-torchaudio==2.10.0+cu129
+# torchaudio==2.10.0+cu129  # commented out - using custom PyTorch
     # via
     #   -r requirements/test.in
     #   encodec
@@ -1181,7 +1181,7 @@ torchmetrics==1.7.4
     #   pytorch-lightning
     #   terratorch
     #   torchgeo
-torchvision==0.25.0+cu129
+# torchvision==0.25.0+cu129  # commented out - using custom PyTorch
     # via
     #   -r requirements/test.in
     #   lightly
