@@ -14,16 +14,17 @@
  * limitations under the License.
  */
 
-#include <torch/all.h>
+#include <torch/csrc/stable/library.h>
+#include <torch/csrc/stable/tensor.h>
+#include <torch/csrc/stable/accelerator.h>
+#include <torch/headeronly/core/ScalarType.h>
+#include "../../torch_stable_utils.h"
 
 #include <cuda_runtime_api.h>
 #include <cuda_runtime.h>
 
-#include <ATen/cuda/CUDAContext.h>
-#include <c10/cuda/CUDAGuard.h>
-
 #include <cuda_fp8.h>
-#include "dispatch_utils.h"
+#include "../../stable_dispatch_utils.h"
 
 #include "cuda_utils.h"
 #include "launch_bounds_utils.h"
@@ -108,17 +109,18 @@ __global__ void __launch_bounds__(512, VLLM_BLOCKS_PER_SM(512))
 
 }  // namespace vllm
 
-void scaled_fp4_quant_sm1xxa(torch::Tensor const& output,
-                             torch::Tensor const& input,
-                             torch::Tensor const& output_sf,
-                             torch::Tensor const& input_sf) {
+void scaled_fp4_quant_sm1xxa(torch::stable::Tensor const& output,
+                             torch::stable::Tensor const& input,
+                             torch::stable::Tensor const& output_sf,
+                             torch::stable::Tensor const& input_sf) {
   int32_t m = input.size(0);
   int32_t n = input.size(1);
 
-  TORCH_CHECK(n % 16 == 0, "The N dimension must be multiple of 16.");
-  TORCH_CHECK(input.scalar_type() == at::ScalarType::Half ||
-                  input.scalar_type() == at::ScalarType::BFloat16,
-              "Unsupported input data type for quantize_to_fp4.");
+  STD_TORCH_CHECK(n % 16 == 0, "The N dimension must be multiple of 16.");
+  STD_TORCH_CHECK(
+      input.scalar_type() == torch::headeronly::ScalarType::Half ||
+          input.scalar_type() == torch::headeronly::ScalarType::BFloat16,
+      "Unsupported input data type for quantize_to_fp4.");
 
   int multiProcessorCount =
       get_device_attribute(cudaDevAttrMultiProcessorCount, -1);
@@ -126,8 +128,9 @@ void scaled_fp4_quant_sm1xxa(torch::Tensor const& output,
   auto input_sf_ptr = static_cast<float const*>(input_sf.data_ptr());
   auto sf_out = static_cast<int32_t*>(output_sf.data_ptr());
   auto output_ptr = static_cast<int64_t*>(output.data_ptr());
-  const at::cuda::OptionalCUDAGuard device_guard(device_of(input));
-  auto stream = at::cuda::getCurrentCUDAStream(input.get_device());
+  torch::stable::accelerator::DeviceGuard device_guard(
+      input.get_device_index());
+  auto stream = get_current_cuda_stream(input.get_device_index());
 
   // Grid, Block size. Each thread converts 8 values.
   dim3 block(std::min(int(n / ELTS_PER_THREAD), 512));
@@ -136,12 +139,14 @@ void scaled_fp4_quant_sm1xxa(torch::Tensor const& output,
   int effectiveRows = vllm::computeEffectiveRows(m);
   dim3 grid(std::min(effectiveRows, multiProcessorCount * numBlocksPerSM));
 
-  VLLM_DISPATCH_HALF_TYPES(input.scalar_type(), "nvfp4_quant_kernel", [&] {
-    using cuda_type = vllm::CUDATypeConverter<scalar_t>::Type;
-    auto input_ptr = static_cast<cuda_type const*>(input.data_ptr());
-    // NOTE: We don't support e8m0 scales at this moment.
-    vllm::cvt_fp16_to_fp4<cuda_type, false><<<grid, block, 0, stream>>>(
-        m, n, input_ptr, input_sf_ptr, reinterpret_cast<uint32_t*>(output_ptr),
-        reinterpret_cast<uint32_t*>(sf_out));
-  });
+  VLLM_STABLE_DISPATCH_HALF_TYPES(
+      input.scalar_type(), "nvfp4_quant_kernel", [&] {
+        using cuda_type = vllm::CUDATypeConverter<scalar_t>::Type;
+        auto input_ptr = static_cast<cuda_type const*>(input.data_ptr());
+        // NOTE: We don't support e8m0 scales at this moment.
+        vllm::cvt_fp16_to_fp4<cuda_type, false><<<grid, block, 0, stream>>>(
+            m, n, input_ptr, input_sf_ptr,
+            reinterpret_cast<uint32_t*>(output_ptr),
+            reinterpret_cast<uint32_t*>(sf_out));
+      });
 }
