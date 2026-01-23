@@ -233,7 +233,7 @@ void sm100_cutlass_mla_decode(
   auto in_dtype = q_nope.scalar_type();
   const cudaStream_t stream = get_current_cuda_stream(q_nope.get_device_index());
   const int page_size = kv_c_and_k_pe_cache.size(1);
-  
+
   // NOTE(alcanderian): IsPersistent has bug with manual split_kv.
   // Kernel will hang if batch is too large with large num_kv_splits. (for example bs=8, num_kv_splits=8)
   // Maybe per batch split kv will fix this.
