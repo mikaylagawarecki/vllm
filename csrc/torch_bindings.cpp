@@ -183,32 +183,12 @@ TORCH_LIBRARY_EXPAND(CONCAT(TORCH_EXTENSION_NAME, _cuda_utils), cuda_utils) {
                   &get_max_shared_memory_per_block_device_attribute);
 }
 
-TORCH_LIBRARY_EXPAND(CONCAT(TORCH_EXTENSION_NAME, _custom_ar), custom_ar) {
-  // Custom all-reduce kernels
-  custom_ar.def(
-      "init_custom_ar(int[] ipc_tensors, Tensor rank_data, "
-      "int rank, bool fully_connected) -> int");
-  custom_ar.impl("init_custom_ar", torch::kCUDA, &init_custom_ar);
-  custom_ar.def(
-      "all_reduce(int fa, Tensor inp, Tensor! out, int reg_buffer, "
-      "int reg_buffer_sz_bytes) -> ()");
-  custom_ar.impl("all_reduce", torch::kCUDA, &all_reduce);
-
-  custom_ar.def("dispose", &dispose);
-  custom_ar.def("meta_size", &meta_size);
-
-  custom_ar.def("register_buffer", &register_buffer);
-  custom_ar.def("get_graph_buffer_ipc_meta", &get_graph_buffer_ipc_meta);
-  custom_ar.def("register_graph_buffers", &register_graph_buffers);
-
-  custom_ar.def("allocate_shared_buffer_and_handle",
-                &allocate_shared_buffer_and_handle);
-  custom_ar.def("open_mem_handle(Tensor mem_handle) -> int", &open_mem_handle);
-  custom_ar.impl("open_mem_handle", torch::kCPU, &open_mem_handle);
-
-  custom_ar.def("free_shared_buffer", &free_shared_buffer);
+// Note: Standard custom all-reduce operations (init_custom_ar, all_reduce, etc.)
+// have been migrated to the stable ABI and are now registered in
+// torch_bindings_stable.cpp under _C_custom_ar library.
 #ifdef USE_ROCM
-  // Quick Reduce all-reduce kernels
+TORCH_LIBRARY_EXPAND(CONCAT(TORCH_EXTENSION_NAME, _custom_ar), custom_ar) {
+  // Quick Reduce all-reduce kernels (ROCM-specific, not yet migrated to stable)
   custom_ar.def(
       "qr_all_reduce(int fa, Tensor inp, Tensor out, int quant_level, bool "
       "cast_bf2half) -> ()");
@@ -224,7 +204,7 @@ TORCH_LIBRARY_EXPAND(CONCAT(TORCH_EXTENSION_NAME, _custom_ar), custom_ar) {
 
   // Max input size in bytes
   custom_ar.def("qr_max_size", &qr_max_size);
-#endif
 }
+#endif
 
 REGISTER_EXTENSION(TORCH_EXTENSION_NAME)
