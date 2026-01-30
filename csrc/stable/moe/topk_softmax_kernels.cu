@@ -16,12 +16,18 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
+#include <torch/csrc/stable/accelerator.h>
+#include <torch/csrc/stable/ops.h>
+#include <torch/csrc/stable/tensor.h>
+#include <torch/headeronly/core/ScalarType.h>
+#include <torch/headeronly/util/Exception.h>
+
 #include <type_traits>
-#include <torch/all.h>
-#include <ATen/cuda/CUDAContext.h>
-#include <c10/cuda/CUDAGuard.h>
-#include "../cuda_compat.h"
-#include "../cub_helpers.h"
+
+#include "cuda_compat.h"
+#include "cub_helpers.h"
+#include "stable/torch_stable_utils.h"
 
 #ifndef USE_ROCM
     #include <cuda_bf16.h>
@@ -619,7 +625,7 @@ void topkGatingSoftmaxKernelLauncher(
             break;
 #endif
         default: {
-            TORCH_CHECK(softmax_workspace != nullptr,
+            STD_TORCH_CHECK(softmax_workspace != nullptr,
                 "softmax_workspace must be provided for num_experts that are not a power of 2 or multiple of 64.");
             static constexpr int TPB = 256;
             moeSoftmax<TPB, InputType><<<num_tokens, TPB, 0, stream>>>(
@@ -637,46 +643,46 @@ void topkGatingSoftmaxKernelLauncher(
 
 template<typename ComputeType>
 void dispatch_topk_softmax_launch(
-    torch::Tensor& gating_output,
-    torch::Tensor& topk_weights,
-    torch::Tensor& topk_indices,
-    torch::Tensor& token_expert_indices,
-    torch::Tensor& softmax_workspace,
+    torch::stable::Tensor& gating_output,
+    torch::stable::Tensor& topk_weights,
+    torch::stable::Tensor& topk_indices,
+    torch::stable::Tensor& token_expert_indices,
+    torch::stable::Tensor& softmax_workspace,
     int num_tokens, int num_experts, int topk, bool renormalize, cudaStream_t stream)
 {
-    if (topk_indices.scalar_type() == at::ScalarType::Int) {
+    if (topk_indices.scalar_type() == torch::headeronly::ScalarType::Int) {
         vllm::moe::topkGatingSoftmaxKernelLauncher<int, ComputeType>(
             reinterpret_cast<const ComputeType*>(gating_output.data_ptr()),
-            topk_weights.data_ptr<float>(),
-            topk_indices.data_ptr<int>(),
-            token_expert_indices.data_ptr<int>(),
-            softmax_workspace.data_ptr<float>(),
+            topk_weights.mutable_data_ptr<float>(),
+            topk_indices.mutable_data_ptr<int>(),
+            token_expert_indices.mutable_data_ptr<int>(),
+            softmax_workspace.mutable_data_ptr<float>(),
             num_tokens, num_experts, topk, renormalize, stream);
-    } else if (topk_indices.scalar_type() == at::ScalarType::UInt32) {
+    } else if (topk_indices.scalar_type() == torch::headeronly::ScalarType::UInt32) {
         vllm::moe::topkGatingSoftmaxKernelLauncher<uint32_t, ComputeType>(
             reinterpret_cast<const ComputeType*>(gating_output.data_ptr()),
-            topk_weights.data_ptr<float>(),
-            topk_indices.data_ptr<uint32_t>(),
-            token_expert_indices.data_ptr<int>(),
-            softmax_workspace.data_ptr<float>(),
+            topk_weights.mutable_data_ptr<float>(),
+            topk_indices.mutable_data_ptr<uint32_t>(),
+            token_expert_indices.mutable_data_ptr<int>(),
+            softmax_workspace.mutable_data_ptr<float>(),
             num_tokens, num_experts, topk, renormalize, stream);
     } else {
-        TORCH_CHECK(topk_indices.scalar_type() == at::ScalarType::Long);
+        STD_TORCH_CHECK(topk_indices.scalar_type() == torch::headeronly::ScalarType::Long);
         vllm::moe::topkGatingSoftmaxKernelLauncher<int64_t, ComputeType>(
             reinterpret_cast<const ComputeType*>(gating_output.data_ptr()),
-            topk_weights.data_ptr<float>(),
-            topk_indices.data_ptr<int64_t>(),
-            token_expert_indices.data_ptr<int>(),
-            softmax_workspace.data_ptr<float>(),
+            topk_weights.mutable_data_ptr<float>(),
+            topk_indices.mutable_data_ptr<int64_t>(),
+            token_expert_indices.mutable_data_ptr<int>(),
+            softmax_workspace.mutable_data_ptr<float>(),
             num_tokens, num_experts, topk, renormalize, stream);
     }
 }
 
 void topk_softmax(
-    torch::Tensor& topk_weights,                // [num_tokens, topk]
-    torch::Tensor& topk_indices,                // [num_tokens, topk]
-    torch::Tensor& token_expert_indices,        // [num_tokens, topk]
-    torch::Tensor& gating_output,               // [num_tokens, num_experts]
+    torch::stable::Tensor& topk_weights,                // [num_tokens, topk]
+    torch::stable::Tensor& topk_indices,                // [num_tokens, topk]
+    torch::stable::Tensor& token_expert_indices,        // [num_tokens, topk]
+    torch::stable::Tensor& gating_output,               // [num_tokens, num_experts]
     bool renormalize)
 {
     const int num_experts = gating_output.size(-1);
@@ -687,21 +693,21 @@ void topk_softmax(
     const bool needs_workspace = !is_pow_2 || num_experts > 256;
     const int64_t workspace_size = needs_workspace ? num_tokens * num_experts : 0;
 
-    const at::cuda::OptionalCUDAGuard device_guard(device_of(gating_output));
-    const cudaStream_t stream = at::cuda::getCurrentCUDAStream();
-    const auto workspace_options = gating_output.options().dtype(at::ScalarType::Float);
-    torch::Tensor softmax_workspace = torch::empty({workspace_size}, workspace_options);
+    torch::stable::accelerator::DeviceGuard device_guard(gating_output.get_device_index());
+    const cudaStream_t stream = get_current_cuda_stream(gating_output.get_device_index());
+    torch::stable::Tensor softmax_workspace = torch::stable::empty(
+        {workspace_size}, torch::headeronly::ScalarType::Float, std::nullopt, gating_output.device());
 
-    if (gating_output.scalar_type() == at::ScalarType::Float) {
-        dispatch_topk_softmax_launch<float>(gating_output, topk_weights, topk_indices, 
+    if (gating_output.scalar_type() == torch::headeronly::ScalarType::Float) {
+        dispatch_topk_softmax_launch<float>(gating_output, topk_weights, topk_indices,
             token_expert_indices, softmax_workspace, num_tokens, num_experts, topk, renormalize, stream);
-    } else if (gating_output.scalar_type() == at::ScalarType::Half) {
-        dispatch_topk_softmax_launch<__half>(gating_output, topk_weights, topk_indices, 
+    } else if (gating_output.scalar_type() == torch::headeronly::ScalarType::Half) {
+        dispatch_topk_softmax_launch<__half>(gating_output, topk_weights, topk_indices,
             token_expert_indices, softmax_workspace, num_tokens, num_experts, topk, renormalize, stream);
-    } else if (gating_output.scalar_type() == at::ScalarType::BFloat16) {
-        dispatch_topk_softmax_launch<__nv_bfloat16>(gating_output, topk_weights, topk_indices, 
+    } else if (gating_output.scalar_type() == torch::headeronly::ScalarType::BFloat16) {
+        dispatch_topk_softmax_launch<__nv_bfloat16>(gating_output, topk_weights, topk_indices,
             token_expert_indices, softmax_workspace, num_tokens, num_experts, topk, renormalize, stream);
     } else {
-        TORCH_CHECK(false, "Unsupported gating_output data type: ", gating_output.scalar_type());
+        STD_TORCH_CHECK(false, "Unsupported gating_output data type: ", gating_output.scalar_type());
     }
 }
