@@ -5,10 +5,16 @@
 #include <hip/hip_bf16.h>
 #include <hip/hip_bfloat16.h>
 
-#include "stable/attention/attention_dtypes.h"
+#include "../../../../attention/attention_dtypes.h"
+#include <torch/headeronly/util/Float8_e4m3fn.h>
+#include <torch/headeronly/util/Float8_e4m3fnuz.h>
 
 namespace vllm {
 #ifdef USE_ROCM
+
+// Use header-only Float8 types
+using Float8_e4m3fn = torch::headeronly::Float8_e4m3fn;
+using Float8_e4m3fnuz = torch::headeronly::Float8_e4m3fnuz;
 
 namespace fp8 {
   #ifdef ENABLE_FP8
@@ -26,25 +32,25 @@ __device__ __forceinline__ fp8_type cvt_c10(float const r) {
 // the new HW cvt with something reasonable that doesn't rely on the
 // ROCm 6.3 feature. This allows compiling on ROCm 6.2 or newer.
 template <>
-__device__ __forceinline__ c10::Float8_e4m3fn cvt_c10(float const r) {
+__device__ __forceinline__ Float8_e4m3fn cvt_c10(float const r) {
     #if HIP_FP8_TYPE_OCP
-  return c10::Float8_e4m3fn(
+  return Float8_e4m3fn(
       __hip_cvt_float_to_fp8(r, __hip_fp8_e4m3::__default_saturation,
                              __hip_fp8_e4m3::__default_interpret),
-      c10::Float8_e4m3fn::from_bits());
+      Float8_e4m3fn::from_bits());
     #else
   // Cast implemented by pytorch. Uses bit manipulation instead of HW cvt.
   // HW cvt above is faster when it is available (ROCm 6.3 or newer).
-  return static_cast<c10::Float8_e4m3fn>(r);
+  return static_cast<Float8_e4m3fn>(r);
     #endif
 }
 
 template <>
-__device__ __forceinline__ c10::Float8_e4m3fnuz cvt_c10(float const r) {
-  return c10::Float8_e4m3fnuz(
+__device__ __forceinline__ Float8_e4m3fnuz cvt_c10(float const r) {
+  return Float8_e4m3fnuz(
       __hip_cvt_float_to_fp8(r, __hip_fp8_e4m3_fnuz::__default_saturation,
                              __hip_fp8_e4m3_fnuz::__default_interpret),
-      c10::Float8_e4m3fnuz::from_bits());
+      Float8_e4m3fnuz::from_bits());
 }
 
 template <typename Tout, typename Tin>
