@@ -747,19 +747,16 @@ if(VLLM_GPU_LANG STREQUAL "CUDA" OR VLLM_GPU_LANG STREQUAL "HIP")
     "csrc/stable/torch_bindings.cpp")
 
 
-  if(VLLM_GPU_LANG STREQUAL "CUDA")
-    list(APPEND VLLM_STABLE_EXT_SRC "csrc/stable/permute_cols.cu"
-    "csrc/stable/quantization/w8a8/fp8/per_token_group_quant.cu"
-    "csrc/stable/quantization/w8a8/int8/per_token_group_quant.cu"
-    "csrc/stable/quantization/w8a8/cutlass/scaled_mm_entry.cu"
-    "csrc/cutlass_extensions/common.cpp")
-  endif()
+if(VLLM_GPU_LANG STREQUAL "CUDA")
+  list(APPEND VLLM_STABLE_EXT_SRC "csrc/stable/permute_cols.cu"
+  "csrc/stable/quantization/w8a8/fp8/per_token_group_quant.cu"
+  "csrc/stable/quantization/w8a8/int8/per_token_group_quant.cu"
+  "csrc/stable/quantization/w8a8/cutlass/scaled_mm_entry.cu"
+  "csrc/cutlass_extensions/common.cpp")
 
-  if(VLLM_GPU_LANG STREQUAL "CUDA")
-    set_gencode_flags_for_srcs(
-      SRCS "${VLLM_STABLE_EXT_SRC}"
-      CUDA_ARCHS "${CUDA_ARCHS}")
-  endif()
+  set_gencode_flags_for_srcs(
+    SRCS "${VLLM_STABLE_EXT_SRC}"
+    CUDA_ARCHS "${CUDA_ARCHS}")
 
   #
   # Stable CUTLASS kernels (architecture-specific builds)
@@ -898,6 +895,9 @@ if(VLLM_GPU_LANG STREQUAL "CUDA" OR VLLM_GPU_LANG STREQUAL "HIP")
   else()
     message(STATUS "Not building stable moe_data")
   endif()
+
+#if CUDA endif
+endif()
 
   message(STATUS "Enabling C_stable extension.")
   define_extension_target(
