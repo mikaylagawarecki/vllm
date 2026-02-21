@@ -541,7 +541,48 @@ function (define_extension_target MOD_NAME)
   if (ARG_LANGUAGE STREQUAL "CUDA")
     target_link_libraries(${MOD_NAME} PRIVATE torch CUDA::cudart CUDA::cuda_driver ${ARG_LIBRARIES})
   else()
-    target_link_libraries(${MOD_NAME} PRIVATE torch ${TORCH_LIBRARIES} ${ARG_LIBRARIES})
+    # For HIP builds, we need to explicitly link against libtorch_hip.so to ensure
+    # the HIPGuardImplMasqueradingAsCUDA is registered. Without this, c10::DeviceGuard
+    # fails to switch devices because the guard implementation lookup fails.
+    # The guard registration happens via C10_REGISTER_GUARD_IMPL in libtorch_hip.so
+    # at library load time.
+    #
+    # CRITICAL: We must also ensure the extension links against the SAME libamdhip64.so
+    # that PyTorch was built with. PyTorch ships its own bundled HIP runtime in torch/lib/
+    # and if the extension links against a different HIP runtime (e.g., system ROCm), 
+    # there will be TWO separate HIP runtimes in the process, each with its own device state.
+    # This causes hipSetDevice() called from libtorch to not affect the device state seen
+    # by the extension, leading to GPU memory faults when kernels are launched on wrong devices.
+    find_library(TORCH_HIP_LIBRARY torch_hip PATHS "${TORCH_INSTALL_PREFIX}/lib" NO_DEFAULT_PATH)
+    find_library(TORCH_AMDHIP64_LIBRARY amdhip64 PATHS "${TORCH_INSTALL_PREFIX}/lib" NO_DEFAULT_PATH)
+      
+    if (TORCH_HIP_LIBRARY)
+      # Link against PyTorch's HIP libraries. 
+      # We need to add the library path with high priority in RPATH to ensure
+      # the PyTorch-bundled libamdhip64.so is loaded rather than system ROCm's.
+      set(_torch_lib_dir "${TORCH_INSTALL_PREFIX}/lib")
+      target_link_directories(${MOD_NAME} PRIVATE "${_torch_lib_dir}")
+      set_target_properties(${MOD_NAME} PROPERTIES
+        BUILD_RPATH "${_torch_lib_dir}"
+        INSTALL_RPATH "${_torch_lib_dir}"
+      )
+        
+      if (TORCH_AMDHIP64_LIBRARY)
+        # Explicitly link against PyTorch's amdhip64 to ensure same HIP runtime
+        target_link_libraries(${MOD_NAME} PRIVATE 
+          torch 
+          ${TORCH_HIP_LIBRARY} 
+          ${TORCH_AMDHIP64_LIBRARY}
+          ${TORCH_LIBRARIES} 
+          ${ARG_LIBRARIES})
+        message(STATUS "Linking ${MOD_NAME} against PyTorch's bundled HIP runtime: ${TORCH_AMDHIP64_LIBRARY}")
+      else()
+        target_link_libraries(${MOD_NAME} PRIVATE torch ${TORCH_HIP_LIBRARY} ${TORCH_LIBRARIES} ${ARG_LIBRARIES})
+        message(WARNING "Could not find PyTorch's bundled libamdhip64.so - DeviceGuard may not work correctly")
+      endif()
+    else()
+      target_link_libraries(${MOD_NAME} PRIVATE torch ${TORCH_LIBRARIES} ${ARG_LIBRARIES})
+    endif()
   endif()
 
   install(TARGETS ${MOD_NAME} LIBRARY DESTINATION ${ARG_DESTINATION} COMPONENT ${MOD_NAME})
