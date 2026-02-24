@@ -97,6 +97,9 @@ FROM fetch_vllm_${REMOTE_VLLM} AS fetch_vllm
 # -----------------------
 # vLLM build stages
 FROM fetch_vllm AS build_vllm
+# Install PyTorch 2.10 for ROCm (required for stable ABI support)
+RUN pip install --extra-index-url https://download.pytorch.org/whl/test/rocm7.0 \
+    torch==2.10.0 torchvision==0.25.0 torchaudio==2.10.0
 # Build vLLM (setup.py auto-detects sccache in PATH)
 RUN cd vllm \
     && python3 -m pip install -r requirements/rocm.txt \
@@ -290,6 +293,10 @@ COPY --from=build_vllm_wheel_release ${COMMON_WORKDIR}/vllm/vllm/v1 /vllm_v1
 FROM base AS test
 
 RUN python3 -m pip install --upgrade pip && rm -rf /var/lib/apt/lists/*
+
+# Install PyTorch 2.10 for ROCm (required for stable ABI support)
+RUN pip install --extra-index-url https://download.pytorch.org/whl/test/rocm7.0 \
+    torch==2.10.0 torchvision==0.25.0 torchaudio==2.10.0
 
 # Install vLLM using uv (inherited from base stage)
 # Note: No -U flag to avoid upgrading PyTorch ROCm to CUDA version
