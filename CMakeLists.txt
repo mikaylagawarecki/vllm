@@ -282,7 +282,6 @@ endif()
 set(VLLM_EXT_SRC
   "csrc/quantization/gptq/q_gemm.cu"
   "csrc/quantization/gguf/gguf_kernel.cu"
-  "csrc/cuda_utils_kernels.cu"
   "csrc/torch_bindings.cpp")
 
 if(VLLM_GPU_LANG STREQUAL "CUDA")
