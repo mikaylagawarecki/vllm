@@ -168,7 +168,7 @@ TORCH_LIBRARY_EXPAND(TORCH_EXTENSION_NAME, ops) {
 // torch_bindings_stable.cpp under _C_custom_ar library.
 
 #ifdef USE_ROCM
-TORCH_LIBRARY_EXPAND(CONCAT(TORCH_EXTENSION_NAME, _custom_ar), custom_ar) {
+TORCH_LIBRARY_FRAGMENT(_C_custom_ar, custom_ar) {
   // Quick Reduce all-reduce kernels (ROCM-specific, not yet migrated to stable)
   custom_ar.def(
       "qr_all_reduce(int fa, Tensor inp, Tensor out, int quant_level, bool "
