@@ -993,6 +993,23 @@ if(VLLM_GPU_LANG STREQUAL "CUDA" OR VLLM_GPU_LANG STREQUAL "HIP")
   # Needed to use cuda APIs from C-shim
   target_compile_definitions(_C_stable_libtorch PRIVATE
     USE_CUDA)
+
+  # On ROCm, the stable ABI extension calls raw HIP APIs (e.g. hipGetDevice in
+  # get_device_prop()) which must resolve to PyTorch's bundled libamdhip64.so,
+  # not the system ROCm copy.  A mismatch causes a second HIP runtime to
+  # initialize, corrupting device state (wrong device on DeviceGuard, core
+  # dumps on multi-GPU tests).
+  if(VLLM_GPU_LANG STREQUAL "HIP")
+    find_library(_STABLE_TORCH_AMDHIP64 amdhip64
+      PATHS "${TORCH_INSTALL_PREFIX}/lib" NO_DEFAULT_PATH)
+    if(NOT _STABLE_TORCH_AMDHIP64)
+      message(FATAL_ERROR
+        "Could not find libamdhip64.so in ${TORCH_INSTALL_PREFIX}/lib. "
+        "The stable ABI extension requires PyTorch's bundled libamdhip64 "
+        "to avoid a dual HIP runtime.")
+    endif()
+    target_link_libraries(_C_stable_libtorch PRIVATE ${_STABLE_TORCH_AMDHIP64})
+  endif()
 endif()
 
 #
